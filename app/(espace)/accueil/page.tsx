@@ -58,17 +58,6 @@ export default async function AccueilPage({ searchParams }: { searchParams: Prom
         </p>
       ) : null}
 
-      <form id="chercher" className="stack" action="/accueil" method="get">
-        <label className="field">
-          <span>Chercher une vidéo</span>
-          <input name="q" type="search" defaultValue={query} />
-          <span className="hint">Un mot du titre, de la catégorie, ou un mot-clé. Par exemple : ticket</span>
-        </label>
-        <button className="btn btn-green" type="submit">
-          Chercher
-        </button>
-      </form>
-
       {query ? (
         <div className="stack">
           <h2>Résultats</h2>

@@ -1,5 +1,7 @@
+import { Suspense } from "react"
 import { quitter } from "@/app/login-actions"
 import { Nav } from "@/components/Nav"
+import { SearchField } from "@/components/SearchField"
 
 export function Shell({
   name,
@@ -31,6 +33,9 @@ export function Shell({
               Quitter
             </button>
           </form>
+          <Suspense>
+            <SearchField />
+          </Suspense>
         </div>
       </header>
       <main id="contenu" className="sheet">
