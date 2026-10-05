@@ -22,12 +22,19 @@ export const metadata: Metadata = {
   },
   description: "Des vidéos courtes pour le personnel.",
   robots: { index: false, follow: false },
+  authors: [{ name: "Gabriel Espinosa, société Softstacklyit" }],
+  other: { copyright: "© 2026 Gabriel Espinosa, société Softstacklyit. Tous droits réservés sur le site." },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={`${sans.variable} ${display.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <footer className="rights">
+          <p>© 2026 Gabriel Espinosa, société Softstacklyit. Tous droits réservés sur le site.</p>
+        </footer>
+      </body>
     </html>
   )
 }

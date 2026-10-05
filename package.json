@@ -1,6 +1,8 @@
 {
   "name": "facily-services-school",
   "private": true,
+  "license": "UNLICENSED",
+  "author": "Gabriel Espinosa, société Softstacklyit",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
