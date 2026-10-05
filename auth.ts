@@ -2,7 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import { TRIAL_EMAIL } from "@/lib/constants"
-import { getUserByEmail, upsertUser } from "@/lib/db"
+import { authenticateAccount, getUserByEmail, getUserById, upsertUser, visibleEmployee } from "@/lib/db"
 
 const googleOn = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET)
 
@@ -42,6 +42,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
           }),
         ]),
+    Credentials({
+      id: "compte",
+      name: "Compte",
+      credentials: {
+        email: { label: "Adresse", type: "email" },
+        password: { label: "Mot de passe", type: "password" },
+      },
+      authorize(credentials) {
+        const email = typeof credentials?.email === "string" ? credentials.email : ""
+        const password = typeof credentials?.password === "string" ? credentials.password : ""
+        if (!email || !password) return null
+        const user = authenticateAccount(email, password)
+        if (!user) return null
+        return { id: user.id, email: user.email, name: user.name }
+      },
+    }),
   ],
   callbacks: {
     async signIn({ user, account }) {
@@ -74,9 +90,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token
     },
     async session({ session, token }) {
-      session.user.id = typeof token.uid === "string" ? token.uid : ""
-      session.user.role = token.role === "admin" ? "admin" : "user"
-      if (typeof token.name === "string") session.user.name = token.name
+      const actorId = typeof token.uid === "string" ? token.uid : ""
+      const actor = actorId ? getUserById(actorId) : null
+      if (!actor?.active) {
+        session.user.id = ""
+        session.user.role = "user"
+        session.user.actorId = ""
+        session.user.actorName = ""
+        session.user.actorRole = "user"
+        session.user.switched = false
+        return session
+      }
+      const actAs = typeof token.actAs === "string" ? token.actAs : null
+      const target = visibleEmployee(actor.id, actAs)
+      session.user.actorId = actor.id
+      session.user.actorName = actor.name
+      session.user.actorRole = actor.role
+      session.user.switched = Boolean(target)
+      if (target) {
+        session.user.id = target.id
+        session.user.name = target.name
+        session.user.email = target.email
+        session.user.role = "user"
+      } else {
+        session.user.id = actor.id
+        session.user.name = actor.name
+        session.user.email = actor.email
+        session.user.role = actor.role
+      }
       return session
     },
   },

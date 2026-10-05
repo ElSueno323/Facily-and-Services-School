@@ -16,6 +16,18 @@ export function formatWhen(iso: string | null) {
   }).format(new Date(iso))
 }
 
+export function roleLabel(role: "user" | "responsable" | "admin") {
+  if (role === "admin") return "IT"
+  if (role === "responsable") return "Responsable"
+  return "Employé"
+}
+
+export function placeKindLabel(kind: "magasin" | "restaurant" | null) {
+  if (kind === "restaurant") return "Restaurant"
+  if (kind === "magasin") return "Magasin"
+  return ""
+}
+
 export function statusLabel(
   status: "new" | "started" | "done",
   detail?: { watched?: boolean; questionCount?: number; correctCount?: number },

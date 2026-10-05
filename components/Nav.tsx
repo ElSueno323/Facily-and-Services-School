@@ -3,13 +3,20 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-export function Nav({ role }: { role: "user" | "admin" }) {
+export function Nav({
+  role,
+  showTeam,
+}: {
+  role: "user" | "responsable" | "admin"
+  showTeam: boolean
+}) {
   const path = usePathname()
   const items = [
     { href: "/accueil", label: "Accueil" },
     { href: "/progression", label: "Ma progression" },
   ]
-  if (role === "admin") items.push({ href: "/responsable", label: "Responsable" })
+  if (showTeam) items.push({ href: "/equipe", label: "Équipe" })
+  if (role === "admin") items.push({ href: "/responsable", label: "IT" })
 
   return (
     <nav aria-label="Menu">

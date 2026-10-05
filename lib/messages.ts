@@ -7,12 +7,18 @@ export const erreurs: Record<string, string> = {
   sujet: "Choisissez une catégorie.",
   "sujet-nom": "Écrivez le nom de la catégorie.",
   mot: "Huit mots maximum. Chaque mot reste court.",
-  dernier: "Il doit rester au moins un responsable.",
+  dernier: "Il doit rester au moins un compte IT.",
+  lieu: "Choisissez un magasin ou un restaurant.",
+  "lieu-occupe": "Ce lieu a encore des personnes. Déplacez-les d'abord.",
+  compte: "Écrivez le nom, l'adresse et le mot de passe.",
+  motdepasse: "Le mot de passe doit avoir au moins 8 caractères.",
+  adresse: "Cette adresse est déjà utilisée.",
   soi: "Vous ne pouvez pas fermer votre propre accès.",
   personne: "Cette personne est introuvable.",
   question: "Écrivez la question.",
   reponses: "Écrivez au moins deux réponses.",
   bonne: "Indiquez quelle réponse est la bonne.",
+  connexion: "L'adresse ou le mot de passe ne convient pas.",
 }
 
 export const confirmations: Record<string, string> = {
@@ -24,4 +30,6 @@ export const confirmations: Record<string, string> = {
   personne: "C'est enregistré.",
   exemples: "Les vidéos d'exemple sont retirées.",
   question: "La question est ajoutée.",
+  lieu: "Le lieu est ajouté.",
+  compte: "Le compte est créé.",
 }

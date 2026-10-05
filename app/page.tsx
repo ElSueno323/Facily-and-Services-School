@@ -1,13 +1,16 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { auth, isGoogleReady } from "@/auth"
-import { entrerEssai, entrerGoogle } from "@/app/login-actions"
+import { entrerCompte, entrerEssai, entrerGoogle } from "@/app/login-actions"
+import { erreurs } from "@/lib/messages"
 import { GoogleMark } from "@/components/GoogleMark"
 import { SubmitButton } from "@/components/SubmitButton"
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ erreur?: string }> }) {
   const session = await auth()
   if (session?.user?.id) redirect("/accueil")
+  const params = await searchParams
+  const erreur = params.erreur ? erreurs[params.erreur] : ""
 
   return (
     <div className="wrap login-wrap">
@@ -44,6 +47,18 @@ export default async function LoginPage() {
             </Link>
           </form>
         )}
+        <form action={entrerCompte} className="stack">
+          {erreur ? <p className="warnbox">{erreur}</p> : null}
+          <label className="field">
+            <span>Adresse</span>
+            <input name="email" type="email" autoComplete="username" required />
+          </label>
+          <label className="field">
+            <span>Mot de passe</span>
+            <input name="password" type="password" autoComplete="current-password" required />
+          </label>
+          <SubmitButton pendingLabel="Ouverture…">Entrer</SubmitButton>
+        </form>
       </main>
     </div>
   )

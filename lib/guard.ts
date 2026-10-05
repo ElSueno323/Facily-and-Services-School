@@ -9,6 +9,6 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const session = await requireUser()
-  if (session.user.role !== "admin") redirect("/accueil")
+  if (session.user.actorRole !== "admin" || session.user.switched) redirect("/accueil")
   return session
 }

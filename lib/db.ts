@@ -2,10 +2,18 @@ import fs from "fs"
 import path from "path"
 import { DatabaseSync } from "node:sqlite"
 import { EXAMPLE_VIDEO, TRIAL_EMAIL } from "@/lib/constants"
+import { hashPassword, verifyPassword } from "@/lib/password"
 import { fold } from "@/lib/search"
 
-export type Role = "user" | "admin"
+export type Role = "user" | "responsable" | "admin"
+export type PlaceKind = "magasin" | "restaurant"
 export type VideoStatus = "new" | "started" | "done"
+
+export type Place = {
+  id: string
+  name: string
+  kind: PlaceKind
+}
 
 export type User = {
   id: string
@@ -14,6 +22,9 @@ export type User = {
   image: string | null
   role: Role
   active: boolean
+  placeId: string | null
+  placeName: string | null
+  placeKind: PlaceKind | null
   createdAt: string
 }
 
@@ -24,6 +35,9 @@ type UserRow = {
   image: string | null
   role: Role
   active: number
+  place_id: string | null
+  place_name: string | null
+  place_kind: string | null
   created_at: string
 }
 
@@ -108,6 +122,7 @@ function openDatabase() {
   fs.mkdirSync(dir, { recursive: true })
   fs.mkdirSync(path.join(process.cwd(), "public", "uploads"), { recursive: true })
   const database = new DatabaseSync(path.join(dir, "facily.db"))
+  database.exec("PRAGMA journal_mode = WAL")
   database.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -181,6 +196,7 @@ function openDatabase() {
     );
   `)
   seed(database)
+  ensurePasswordColumn(database)
   ensureExampleQuestions(database)
   ensureExampleTags(database)
   return database
@@ -351,7 +367,43 @@ function seed(database: DatabaseSync) {
   })
 }
 
+function ensurePasswordColumn(database: DatabaseSync) {
+  const columns = database.prepare("PRAGMA table_info(users)").all() as { name: string }[]
+  if (!columns.some((column) => column.name === "password_hash")) {
+    database.exec("ALTER TABLE users ADD COLUMN password_hash TEXT")
+  }
+}
+
+function ensurePlaces(database: DatabaseSync) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS places (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS account_switch (
+      actor_id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL
+    );
+  `)
+  const columns = database.prepare("PRAGMA table_info(users)").all() as { name: string }[]
+  if (!columns.some((column) => column.name === "place_id")) {
+    database.exec("ALTER TABLE users ADD COLUMN place_id TEXT")
+  }
+}
+
+const USER_SQL = `
+  SELECT u.id, u.email, u.name, u.image, u.role, u.active, u.created_at, u.place_id,
+         p.name AS place_name, p.kind AS place_kind
+  FROM users u
+  LEFT JOIN places p ON p.id = u.place_id
+`
+
 const db = globalForDb.facilyDb ?? openDatabase()
+db.exec("PRAGMA journal_mode = WAL")
+ensurePasswordColumn(db)
+ensurePlaces(db)
 db.exec(`
   CREATE TABLE IF NOT EXISTS questions (
     id TEXT PRIMARY KEY,
@@ -393,6 +445,7 @@ ensureExampleTags(db)
 if (process.env.NODE_ENV !== "production") globalForDb.facilyDb = db
 
 function mapUser(row: UserRow): User {
+  const kind = row.place_kind === "magasin" || row.place_kind === "restaurant" ? row.place_kind : null
   return {
     id: row.id,
     email: row.email,
@@ -400,6 +453,9 @@ function mapUser(row: UserRow): User {
     image: row.image,
     role: row.role,
     active: row.active === 1,
+    placeId: row.place_id ?? null,
+    placeName: row.place_name ?? null,
+    placeKind: kind,
     createdAt: row.created_at,
   }
 }
@@ -478,20 +534,56 @@ function correctCounts(userId: string) {
   return new Map(rows.map((row) => [row.video_id, Number(row.n)]))
 }
 
+export function createAccount(input: {
+  email: string
+  name: string
+  role: Role
+  password: string
+  placeId?: string | null
+}): { ok: true } | { ok: false; error: string } {
+  const email = input.email.trim().toLowerCase()
+  const name = input.name.trim()
+  if (!email.includes("@") || !name) return { ok: false, error: "compte" }
+  if (input.password.trim().length < 8) return { ok: false, error: "motdepasse" }
+  const existing = getUserByEmail(email)
+  if (existing) return { ok: false, error: "adresse" }
+  const placeId = input.role === "admin" ? null : input.placeId ?? null
+  if (input.role !== "admin" && !getPlace(placeId ?? "")) return { ok: false, error: "lieu" }
+  const id = crypto.randomUUID()
+  const createdAt = new Date().toISOString()
+  db.prepare(
+    "INSERT INTO users (id, email, name, image, role, active, created_at, password_hash, place_id) VALUES (?, ?, ?, NULL, ?, 1, ?, ?, ?)",
+  ).run(id, email, name, input.role, createdAt, hashPassword(input.password.trim()), placeId)
+  return { ok: true }
+}
+
+export function authenticateAccount(email: string, password: string) {
+  const row = db
+    .prepare(
+      `SELECT u.id, u.email, u.name, u.image, u.role, u.active, u.created_at, u.place_id, u.password_hash,
+              p.name AS place_name, p.kind AS place_kind
+       FROM users u
+       LEFT JOIN places p ON p.id = u.place_id
+       WHERE u.email = ?`,
+    )
+    .get(email.trim().toLowerCase()) as (UserRow & { password_hash: string | null }) | undefined
+  if (!row || row.active !== 1 || !row.password_hash) return null
+  if (!verifyPassword(password, row.password_hash)) return null
+  return mapUser(row)
+}
+
 export function getUserByEmail(email: string) {
-  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email.trim().toLowerCase()) as
-    | UserRow
-    | undefined
+  const row = db.prepare(`${USER_SQL} WHERE u.email = ?`).get(email.trim().toLowerCase()) as UserRow | undefined
   return row ? mapUser(row) : null
 }
 
 export function getUserById(id: string) {
-  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined
+  const row = db.prepare(`${USER_SQL} WHERE u.id = ?`).get(id) as UserRow | undefined
   return row ? mapUser(row) : null
 }
 
 export function listUsers() {
-  const rows = db.prepare("SELECT * FROM users").all() as UserRow[]
+  const rows = db.prepare(`${USER_SQL}`).all() as UserRow[]
   return rows
     .map(mapUser)
     .sort((a, b) => {
@@ -527,6 +619,9 @@ export function upsertUser(input: { email: string; name: string; image?: string 
     image: input.image ?? null,
     role,
     active: 1,
+    place_id: null,
+    place_name: null,
+    place_kind: null,
     created_at: createdAt,
   })
 }
@@ -541,7 +636,7 @@ function otherActiveAdmins(id: string) {
 export function setUserRole(id: string, role: Role): { ok: true } | { ok: false; error: string } {
   const user = getUserById(id)
   if (!user) return { ok: false, error: "personne" }
-  if (user.role === "admin" && role === "user" && otherActiveAdmins(id) === 0) {
+  if (user.role === "admin" && role !== "admin" && otherActiveAdmins(id) === 0) {
     return { ok: false, error: "dernier" }
   }
   db.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id)
@@ -555,6 +650,114 @@ export function setUserActive(id: string, active: boolean): { ok: true } | { ok:
     return { ok: false, error: "dernier" }
   }
   db.prepare("UPDATE users SET active = ? WHERE id = ?").run(active ? 1 : 0, id)
+  if (!active) clearSwitch(id)
+  return { ok: true }
+}
+
+export function listPlaces(): Place[] {
+  const rows = db.prepare("SELECT id, name, kind FROM places ORDER BY name").all() as {
+    id: string
+    name: string
+    kind: string
+  }[]
+  return rows.flatMap((row) => {
+    if (row.kind !== "magasin" && row.kind !== "restaurant") return []
+    return [{ id: row.id, name: row.name, kind: row.kind }]
+  })
+}
+
+export function getPlace(id: string) {
+  return listPlaces().find((place) => place.id === id) ?? null
+}
+
+export function createPlace(name: string, kind: PlaceKind) {
+  const id = crypto.randomUUID()
+  db.prepare("INSERT INTO places (id, name, kind, created_at) VALUES (?, ?, ?, ?)").run(
+    id,
+    name,
+    kind,
+    new Date().toISOString(),
+  )
+  return id
+}
+
+export function deletePlace(id: string): { ok: true } | { ok: false; error: string } {
+  const used = db.prepare("SELECT COUNT(*) AS n FROM users WHERE place_id = ?").get(id) as { n: number }
+  if (Number(used.n) > 0) return { ok: false, error: "lieu-occupe" }
+  db.prepare("DELETE FROM places WHERE id = ?").run(id)
+  return { ok: true }
+}
+
+export function assignPerson(
+  id: string,
+  role: Role,
+  placeId: string | null,
+): { ok: true } | { ok: false; error: string } {
+  const user = getUserById(id)
+  if (!user) return { ok: false, error: "personne" }
+  if (user.role === "admin" && role !== "admin" && otherActiveAdmins(id) === 0) {
+    return { ok: false, error: "dernier" }
+  }
+  if (role === "admin") {
+    db.prepare("UPDATE users SET role = 'admin', place_id = NULL WHERE id = ?").run(id)
+    clearSwitch(id)
+    return { ok: true }
+  }
+  if (!placeId || !getPlace(placeId)) return { ok: false, error: "lieu" }
+  db.prepare("UPDATE users SET role = ?, place_id = ? WHERE id = ?").run(role, placeId, id)
+  if (role !== "responsable") clearSwitch(id)
+  return { ok: true }
+}
+
+export function employeesOf(placeId: string) {
+  return listUsers().filter((user) => user.role === "user" && user.active && user.placeId === placeId)
+}
+
+function canViewEmployee(actor: User | null, target: User | null) {
+  return Boolean(
+    actor?.active &&
+      actor.role === "responsable" &&
+      actor.placeId &&
+      target?.active &&
+      target.role === "user" &&
+      target.placeId === actor.placeId,
+  )
+}
+
+export function clearSwitch(actorId: string) {
+  db.prepare("DELETE FROM account_switch WHERE actor_id = ?").run(actorId)
+}
+
+export function visibleEmployee(actorId: string, preferredId?: string | null) {
+  const actor = getUserById(actorId)
+  if (preferredId) {
+    const preferred = getUserById(preferredId)
+    if (canViewEmployee(actor, preferred)) return preferred
+  }
+  return activeSwitch(actorId)
+}
+
+export function activeSwitch(actorId: string) {
+  const row = db.prepare("SELECT target_id FROM account_switch WHERE actor_id = ?").get(actorId) as
+    | { target_id: string }
+    | undefined
+  if (!row) return null
+  const actor = getUserById(actorId)
+  const target = getUserById(row.target_id)
+  if (!canViewEmployee(actor, target)) return null
+  return target
+}
+
+export function setSwitch(actorId: string, targetId: string): { ok: true } | { ok: false; error: string } {
+  const actor = getUserById(actorId)
+  const target = getUserById(targetId)
+  if (!actor?.active || actor.role !== "responsable" || !actor.placeId) return { ok: false, error: "personne" }
+  if (!target?.active || target.role !== "user" || target.placeId !== actor.placeId) {
+    return { ok: false, error: "personne" }
+  }
+  db.prepare(
+    "INSERT INTO account_switch (actor_id, target_id) VALUES (?, ?) ON CONFLICT(actor_id) DO UPDATE SET target_id = excluded.target_id",
+  ).run(actorId, targetId)
   return { ok: true }
 }
 

@@ -49,8 +49,8 @@ AUTH_GOOGLE_SECRET=collez le secret ici`}</pre>
           </li>
         </ol>
         <p className="note">
-          La première personne qui entre avec Google devient responsable. Les suivantes sont des utilisateurs. Vous
-          pourrez changer les rôles dans l'espace responsable.
+          La première personne qui entre avec Google devient admin. Les suivantes sont des employés. Vous
+          pourrez changer les rôles dans l'espace IT.
         </p>
       </main>
     </div>

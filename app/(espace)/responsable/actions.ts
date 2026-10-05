@@ -16,8 +16,11 @@ import {
   deleteVideo,
   renameModule,
   renameVideo,
+  assignPerson,
+  createAccount,
+  createPlace,
+  deletePlace,
   setUserActive,
-  setUserRole,
 } from "@/lib/db"
 
 function clean(value: FormDataEntryValue | null, max: number) {
@@ -172,18 +175,49 @@ export async function retirerQuestion(formData: FormData) {
   redirect("/responsable/videos?ok=retire")
 }
 
-export async function changerRole(formData: FormData) {
+export async function ajouterLieu(formData: FormData) {
   await requireAdmin()
-  const id = String(formData.get("id") ?? "")
-  const role = formData.get("role") === "admin" ? "admin" : "user"
-  const result = setUserRole(id, role)
+  const name = clean(formData.get("nom"), 80)
+  if ("error" in name) redirect(`/responsable/personnes?erreur=${name.error === "titre" ? "lieu" : "long"}`)
+  const kind = formData.get("type") === "restaurant" ? "restaurant" : formData.get("type") === "magasin" ? "magasin" : null
+  if (!kind) redirect("/responsable/personnes?erreur=lieu")
+  createPlace(name.text, kind)
+  redirect("/responsable/personnes?ok=lieu")
+}
+
+export async function retirerLieu(formData: FormData) {
+  await requireAdmin()
+  if (formData.get("confirme") !== "on") redirect("/responsable/personnes?erreur=lieu")
+  const result = deletePlace(String(formData.get("id") ?? ""))
+  redirect(`/responsable/personnes?${result.ok ? "ok=retire" : `erreur=${result.error}`}`)
+}
+
+export async function ajouterCompte(formData: FormData) {
+  await requireAdmin()
+  const result = createAccount({
+    name: String(formData.get("nom") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("motdepasse") ?? ""),
+    role: "responsable",
+    placeId: String(formData.get("lieu") ?? "") || null,
+  })
+  redirect(`/responsable/personnes?${result.ok ? "ok=compte" : `erreur=${result.error}`}`)
+}
+
+export async function associerResponsable(formData: FormData) {
+  await requireAdmin()
+  const result = assignPerson(
+    String(formData.get("id") ?? ""),
+    "responsable",
+    String(formData.get("lieu") ?? "") || null,
+  )
   redirect(`/responsable/personnes?${result.ok ? "ok=personne" : `erreur=${result.error}`}`)
 }
 
 export async function changerAcces(formData: FormData) {
   const session = await requireAdmin()
   const id = String(formData.get("id") ?? "")
-  if (id === session.user.id) redirect("/responsable/personnes?erreur=soi")
+  if (id === session.user.actorId) redirect("/responsable/personnes?erreur=soi")
   if (formData.get("confirme") !== "on") redirect("/responsable/personnes?erreur=personne")
   const active = formData.get("actif") === "1"
   const result = setUserActive(id, active)

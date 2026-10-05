@@ -4,7 +4,7 @@ import { TRIAL_EMAIL } from "@/lib/constants"
 import { getCatalog, listUsers } from "@/lib/db"
 import { requireAdmin } from "@/lib/guard"
 
-export const metadata = { title: "Responsable" }
+export const metadata = { title: "IT" }
 
 export default async function ResponsablePage() {
   const session = await requireAdmin()
@@ -14,7 +14,7 @@ export default async function ResponsablePage() {
   return (
     <div className="stack-lg">
       <div>
-        <p className="kicker">Responsable</p>
+        <p className="kicker">IT</p>
         <h1>Que voulez-vous faire ?</h1>
         <p className="lead">
           {users.length === 0
@@ -49,7 +49,7 @@ export default async function ResponsablePage() {
         <Link className="scard" href="/responsable/personnes">
           <span className="kicker">Comptes</span>
           <span className="scard-title">Les personnes</span>
-          <span className="hint">Responsable, utilisateur, ou accès fermé.</span>
+          <span className="hint">Magasins, restaurants, et les profils liés aux responsables.</span>
           <span className="vrow-go">Ouvrir</span>
         </Link>
       </div>
